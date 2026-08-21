@@ -12,13 +12,18 @@ SIMPLIFICADO: Código mais limpo e direto ao ponto.
 
 import os
 import sys
+from pathlib import Path
+
 from dotenv import load_dotenv
 from langchain import hub
 from langchain_core.prompts import ChatPromptTemplate
-from utils import load_yaml, check_env_vars, print_section_header
+from utils import load_yaml, check_env_vars, validate_prompt_structure
 
 load_dotenv()
 
+PROMPT_KEY = "bug_to_user_story_v2"
+PROMPT_NAME = "bug_to_user_story_v2"
+INPUT_FILE = Path("prompts") / f"{PROMPT_NAME}.yml"
 
 def push_prompt_to_langsmith(prompt_name: str, prompt_data: dict) -> bool:
     """
@@ -32,6 +37,37 @@ def push_prompt_to_langsmith(prompt_name: str, prompt_data: dict) -> bool:
         True se sucesso, False caso contrário
     """
     ...
+    username = os.getenv("USERNAME_LANGSMITH_HUB", "")
+    hub_prompt_name = f"{username}/{prompt_name}"
+
+    try:
+        prompt_template = ChatPromptTemplate.from_messages([
+            ("system", prompt_data["system_prompt"]),
+            ("human", prompt_data["user_prompt"]),
+        ])
+
+        print(f"Enviando prompt: {hub_prompt_name}")
+        url = hub.push(
+            hub_prompt_name,
+            prompt_template,
+            new_repo_is_public=True,
+            new_repo_description=prompt_data.get("description", ""),
+            tags=_build_tags(prompt_data),
+        )
+        print(f"Enviado: {url}")
+
+        return True
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
+
+def _build_tags(prompt_data: dict) -> list[str]:
+    tags = list(prompt_data.get("tags", []))
+    for technique in prompt_data.get("techniques_applied", []):
+        if technique not in tags:
+            tags.append(technique)
+    return tags
 
 
 def validate_prompt(prompt_data: dict) -> tuple[bool, list]:
@@ -44,13 +80,44 @@ def validate_prompt(prompt_data: dict) -> tuple[bool, list]:
     Returns:
         (is_valid, errors) - Tupla com status e lista de erros
     """
-    ...
+
+    is_valid, errors = validate_prompt_structure(prompt_data)
+
+    user_prompt = prompt_data.get("user_prompt", "").strip()
+    if not user_prompt:
+        errors.append("user_prompt está vazio")
+
+    system_prompt = prompt_data.get("system_prompt", "")
+    combined = f"{system_prompt}\n{user_prompt}"
+    if "{bug_report}" not in combined:
+        errors.append("nao existe a var {bug_report}")
+
+    if "TODO" in user_prompt:
+        errors.append("ainda existem TODOs")
+
+    return len(errors) == 0, errors
 
 
 def main():
     """Função principal"""
     ...
+    if not check_env_vars(["LANGSMITH_API_KEY", "USERNAME_LANGSMITH_HUB"]):
+        return 1
 
+    raw = load_yaml(str(INPUT_FILE))
+    if not raw:
+        return 1
+
+    prompt_data = raw.get(PROMPT_KEY, raw)
+
+    is_valid, errors = validate_prompt(prompt_data)
+    if not is_valid:
+        print("errors:")
+        for err in errors:
+            print(f"  - {err}")
+        return 1
+
+    return 0 if push_prompt_to_langsmith(PROMPT_NAME, prompt_data) else 1
 
 if __name__ == "__main__":
     sys.exit(main())

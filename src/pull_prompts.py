@@ -13,19 +13,40 @@ import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
-from langchain import hub
+from langsmith import Client
+
 from utils import save_yaml, check_env_vars, print_section_header
 
 load_dotenv()
 
+PROMPT_NAME = "bug_to_user_story_v1"
+OUTPUT_FILE = Path("prompts") / f"{PROMPT_NAME}.yml"
 
 def pull_prompts_from_langsmith():
     ...
+    username = os.getenv("USERNAME_LANGSMITH_HUB", "")
+    hub_prompt_name = f"{username}/{PROMPT_NAME}"
 
+    print(f"Pulling prompt: {hub_prompt_name}")
+    client = Client()
+    prompt = client.pull_prompt(
+        hub_prompt_name,
+    )
+    save_yaml(prompt.to_json(), OUTPUT_FILE.name)
+    print(f"Saved: {OUTPUT_FILE.name}")
 
 def main():
     """Função principal"""
     ...
+    print_section_header("Pulling prompts from LangSmith")
+    if not check_env_vars(["LANGSMITH_API_KEY", "USERNAME_LANGSMITH_HUB"]):
+        return 1
+    try:
+        pull_prompts_from_langsmith()
+        return 0
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
 
 
 if __name__ == "__main__":
