@@ -16,30 +16,38 @@ def load_prompts(file_path: str):
     with open(file_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
+def load_prompt_data():
+   return load_prompts(str(Path(__file__).parent.parent / "prompts" / "bug_to_user_story_v2.yml"))["bug_to_user_story_v2"]
+
 class TestPrompts:
+
     def test_prompt_has_system_prompt(self):
         """Verifica se o campo 'system_prompt' existe e não está vazio."""
-        pass
+        assert "system_prompt" in load_prompt_data()
 
     def test_prompt_has_role_definition(self):
         """Verifica se o prompt define uma persona (ex: "Você é um Product Manager")."""
-        pass
+        assert "Atue como Product Manager" in load_prompt_data()["system_prompt"]
 
     def test_prompt_mentions_format(self):
         """Verifica se o prompt exige formato Markdown ou User Story padrão."""
-        pass
+        assert "User Story" in load_prompt_data()["system_prompt"]
 
     def test_prompt_has_few_shot_examples(self):
-        """Verifica se o prompt contém exemplos de entrada/saída (técnica Few-shot)."""
-        pass
+        data = load_prompt_data()["system_prompt"]
+        assert "Exemplo A" in data
+        assert "Exemplo B" in data
 
     def test_prompt_no_todos(self):
-        """Garante que você não esqueceu nenhum `[TODO]` no texto."""
-        pass
+        assert "TODOs" not in load_prompt_data()["system_prompt"]
 
     def test_minimum_techniques(self):
         """Verifica (através dos metadados do yaml) se pelo menos 2 técnicas foram listadas."""
-        pass
+        data = load_prompt_data()
+        techniques = data["techniques_applied"]
+        assert len(techniques) >= 2
+        is_valid, errors = validate_prompt_structure(data)
+        assert is_valid, errors
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
